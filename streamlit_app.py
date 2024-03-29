@@ -1,40 +1,81 @@
-import altair as alt
-import numpy as np
-import pandas as pd
 import streamlit as st
+import torch
+import torchvision
+import torchvision.transforms as transforms
+from torch import nn, optim
 
-"""
-# Welcome to Streamlit!
+# 사이드바 설정
+st.sidebar.title('모델 설정')
+model_option = st.sidebar.selectbox('모델 선택', ['모델 1', '모델 2'])
+learning_rate = st.sidebar.slider('학습률', min_value=0.001, max_value=0.1, value=0.01)
+epochs = st.sidebar.slider('에포크 수', min_value=1, max_value=20, value=5)
+start_training = st.sidebar.button('학습 시작')
 
-Edit `/streamlit_app.py` to customize this app to your heart's desire :heart:.
-If you have any questions, checkout our [documentation](https://docs.streamlit.io) and [community
-forums](https://discuss.streamlit.io).
+# 메인 화면
+st.title('PyTorch MNIST 학습')
 
-In the meantime, below is an example of what you can do with just a few lines of code:
-"""
+# 모델 정의
+class Model1(nn.Module):
+    def __init__(self):
+        super(Model1, self).__init__()
+        self.flatten = nn.Flatten()
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(28*28, 512),
+            nn.ReLU(),
+            nn.Linear(512, 10),
+        )
 
-num_points = st.slider("Number of points in spiral", 1, 10000, 1100)
-num_turns = st.slider("Number of turns in spiral", 1, 300, 31)
+    def forward(self, x):
+        x = self.flatten(x)
+        logits = self.linear_relu_stack(x)
+        return logits
 
-indices = np.linspace(0, 1, num_points)
-theta = 2 * np.pi * num_turns * indices
-radius = indices
+class Model2(nn.Module):
+    def __init__(self):
+        super(Model2, self).__init__()
+        self.conv1 = nn.Conv2d(1, 20, 5, 1)
+        self.conv2 = nn.Conv2d(20, 50, 5, 1)
+        self.fc1 = nn.Linear(4*4*50, 500)
+        self.fc2 = nn.Linear(500, 10)
 
-x = radius * np.cos(theta)
-y = radius * np.sin(theta)
+    def forward(self, x):
+        x = nn.functional.relu(self.conv1(x))
+        x = nn.functional.max_pool2d(x, 2, 2)
+        x = nn.functional.relu(self.conv2(x))
+        x = nn.functional.max_pool2d(x, 2, 2)
+        x = x.view(-1, 4*4*50)
+        x = nn.functional.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x
 
-df = pd.DataFrame({
-    "x": x,
-    "y": y,
-    "idx": indices,
-    "rand": np.random.randn(num_points),
-})
+# 모델 인스턴스 생성
+if model_option == '모델 1':
+    model = Model1()
+else:
+    model = Model2()
 
-st.altair_chart(alt.Chart(df, height=700, width=700)
-    .mark_point(filled=True)
-    .encode(
-        x=alt.X("x", axis=None),
-        y=alt.Y("y", axis=None),
-        color=alt.Color("idx", legend=None, scale=alt.Scale()),
-        size=alt.Size("rand", legend=None, scale=alt.Scale(range=[1, 150])),
-    ))
+# MNIST 데이터셋 다운로드 및 로드
+transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+trainset = torchvision.datasets.MNIST(root='./data', train=True, download=True, transform=transform)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True)
+
+# 손실 함수 및 옵티마이저 설정
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+# 학습 시작 버튼이 클릭되면 학습을 시작
+if start_training:
+    for epoch in range(epochs):  # 에포크 반복
+        running_loss = 0.0
+        for i, data in enumerate(trainloader, 0):
+            inputs, labels = data
+            optimizer.zero_grad()
+
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+
+            running_loss += loss.item()
+        st.write(f'에포크 {epoch + 1}, 손실: {running_loss / len(trainloader)}')
+    st.success('학습 완료!')
