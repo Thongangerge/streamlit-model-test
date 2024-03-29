@@ -3,7 +3,7 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 from torch import nn, optim
-
+#
 # 사이드바 설정
 st.sidebar.title('모델 설정')
 model_option = st.sidebar.selectbox('모델 선택', ['모델 1', '모델 2'])
